@@ -53,6 +53,14 @@ volatile byte previous_state[4];
 volatile int pulse_duration[4] = {1000, 1000, 1000, 1000};
 int mode_mapping[4];
 
+//PID variables
+int roll_pulse_length_pid, pitch_pulse_length_pid, yaw_pulse_length_pid;
+volatile float angles[4];
+volatile float previous_angles[4];
+volatile float error_pulse_length[4];
+volatile float previous_error_pulse_length[4] = {0.,0.,0.,0.};
+unsigned long previous_time;
+
 
 /**
 * Setup routine.
@@ -136,11 +144,42 @@ if (difference_init<10000){
 
   if (throttle_pulse_length >= 1012){
     //memorize previous angles
+    previous_angles[YAW]=angles[YAW];
+    previous_angles[PITCH]=angles[PITCH];
+    previous_angles[ROLL]=angles[ROLL];
+    
     gyro.update();
+    angles[YAW]=gyro.getAngleZ();
+    angles[PITCH]=gyro.getAngleX();
+    angles[ROLL]=gyro.getAngleY();
+    
     //memorize time difference in between angle mesures
+    now = micros();
+    difference=now-previous_time;
+    
     //compute pid
-    roll_pulse_length = error_roll * COEF_KP + error_derivative_roll * COEF_KD
+    error_pulse_length[ROLL] = angles[ROLL]*100/4+1500 - roll_pulse_length ;
+    roll_pulse_length_pid = error_pulse_length[ROLL] * COEF_KP + (  error_pulse_length[ROLL]- previous_error_pulse_length[ROLL] ) / difference * COEF_KD ;
+    roll_pulse_length_pid = minMax(roll_pulse_length_pid, -400 , 400);
+    previous_error_pulse_length[ROLL] = error_pulse_length[ROLL];
+
+    error_pulse_length[PITCH] = angles[PITCH]*100/4+1500 - pitch_pulse_length ;
+    pitch_pulse_length_pid = error_pulse_length[PITCH] * COEF_KP + (  error_pulse_length[PITCH]- previous_error_pulse_length[PITCH] ) / difference * COEF_KD ;
+    pitch_pulse_length_pid = minMax(pitch_pulse_length_pid, -400, 400);
+    previous_error_pulse_length[ROLL] = error_pulse_length[ROLL];
+
+    error_pulse_length[YAW] = angles[YAW]*100/4+1500 - yaw_pulse_length ;
+    yaw_pulse_length_pid = error_pulse_length[YAW] * COEF_KP + (  error_pulse_length[YAW]- previous_error_pulse_length[YAW] ) / difference * COEF_KD ;
+    yaw_pulse_length_pid = minMax(yaw_pulse_length_pid, -400, 400);
+    previous_error_pulse_length[YAW] = error_pulse_length[YAW];
+
+    roll_pulse_length=abs(roll_pulse_length_pid)/roll_pulse_length_pid * round(abs(roll_pulse_length_pid));
+    pitch_pulse_length=abs(pitch_pulse_length_pid)/pitch_pulse_length_pid * round(abs(pitch_pulse_length_pid));
+    yaw_pulse_length=abs(yaw_pulse_length_pid)/yaw_pulse_length_pid * round(abs(yaw_pulse_length_pid));
+
+    previous_time=now;
   }
+  
  
 
   //Calibration des moteurs
@@ -186,64 +225,22 @@ if (difference_init<10000){
     delayMicroseconds(attente); 
 }
 
+
+ 
 /**
-* Calcul la consigne d'un axe en degré/sec.
+* Calcul de minmax
 *
-* @param float angle         Angle mesuré en degré sur l'axe (X, Y, Z)
-* @param int   channel_pulse Durée en µs de l'impulsion reçue pour l'axe (comprise entre 1000µs et 2000µs)
+* @param float a  Valeur à comparer
+* @param float b  Borne inférieure
+* @param float c  Borne supérieure
 * @return float
 */
 
-float calculateSetPoint(float angle, int channel_pulse) {
-    float level_adjust = angle * 15;
-    float set_point    = 0;
-
-    // On s'accorde une marge 16µs pour de meilleurs résultats
-    if (channel_pulse > 1508) {
-        set_point = channel_pulse - 1508;
-    } else if (channel_pulse <  1492) {
-        set_point = channel_pulse - 1492;
-    }
- 
-    set_point -= level_adjust;
-    set_point /= 3;
-
-    return set_point;
+float minMax ( float a , float b , float c ) {
+  float result = min (a, c);
+  result = max(result,b);
+  return result;
 }
-
- 
-
-/**
-* Calcul des erreurs
-
-void calculateErrors() {
-    // Calcul des erreurs courantes
-    errors[YAW]   = angular_motions[YAW]   - pid_set_points[YAW];
-    errors[PITCH] = angular_motions[PITCH] - pid_set_points[PITCH];
-    errors[ROLL]  = angular_motions[ROLL]  - pid_set_points[ROLL];
- 
-    // Calcul des sommes d'erreurs : composante intégrale
-    error_sum[YAW]   += errors[YAW];
-    error_sum[PITCH] += errors[PITCH];
-    error_sum[ROLL]  += errors[ROLL];
- 
-    // on s'assure que ∫e.Ki ne dépasse pas 400
-    error_sum[YAW]   = minMax(error_sum[YAW],   -400/Ki[YAW],   400/Ki[YAW]);
-    error_sum[PITCH] = minMax(error_sum[PITCH], -400/Ki[PITCH], 400/Ki[PITCH]);
-    error_sum[ROLL]  = minMax(error_sum[ROLL],  -400/Ki[ROLL],  400/Ki[ROLL]);
- 
-    // Calcul du delta erreur : composante dérivée
-    delta_err[YAW]   = errors[YAW]   - previous_error[YAW];
-    delta_err[PITCH] = errors[PITCH] - previous_error[PITCH];
-    delta_err[ROLL]  = errors[ROLL]  - previous_error[ROLL];
- 
-    // L'erreur courante devient l'erreur précédente pour le prochain tour de boucle
-    previous_error[YAW]   = errors[YAW];
-    previous_error[PITCH] = errors[PITCH];
-    previous_error[ROLL]  = errors[ROLL];
-}
-
- */
  
 
 /**
@@ -306,20 +303,5 @@ ISR(PCINT2_vect)
         previous_state[CHANNEL4] = LOW;                            // Save current state
         pulse_duration[CHANNEL4] = current_time - timer[CHANNEL4]; // Stop timer & calculate pulse duration
     }
-}
-
-/**
-* Calcul de minmax
-*
-* @param float a  Valeur à comparer
-* @param float b  Borne inférieure
-* @param float c  Borne supérieure
-* @return float
-*/
-
-float minMax ( float a , float b , float c ) {
-  float result = min (a, c);
-  result = max(result,b);
-  return result;
 }
  
