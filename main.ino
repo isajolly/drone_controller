@@ -197,6 +197,7 @@ if (difference_init<10000){
   pulse_length_escB=minMax(pulse_length_escB,1000,2000);
   pulse_length_escC=minMax(pulse_length_escC,1000,2000);
   pulse_length_escD=minMax(pulse_length_escD,1000,2000);
+
  
 
    // Fs = 250Hz : on envoie les impulsions toutes les 4000µs
