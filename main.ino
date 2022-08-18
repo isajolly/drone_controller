@@ -13,19 +13,30 @@
 #define THROTTLE 2
 
 
-#define COMMAND_REDUCTION_COEF  5  //reduces the intensity of the command on roll and pitch and yaw received from the transmitter
+#define COMMAND_REDUCTION_COEF  3  //reduces the intensity of the command on roll and pitch and yaw received from the transmitter
 
 #define REDUCE_MOTOR_A  1
-#define REDUCE_MOTOR_B  0.93
+#define REDUCE_MOTOR_B  1
 #define REDUCE_MOTOR_C  1
-#define REDUCE_MOTOR_D  0.95
+#define REDUCE_MOTOR_D  0.92
 
 #define COEF_THROTTLE   1
 #define COEF_PITCH_ROLL 1
 #define COEF_YAW        1
 
-#define COEF_KP 1
-#define COEF_KD 1
+#define CYaw        0.
+
+// Kp = -w0^2 * I
+// Kd = -2 * m * w0 * I
+// m = 0.7
+// w0 = 4 / (m*ts)
+// ts = 2 / k0
+// k0 = 2
+
+#define COEF_KP -7.9184 //-0.15     //les coefficients sont proportionnels à I donc à modifier proportionnellement
+#define COEF_KD -1.94   //-0.04     //ou à modifier en changeant w0 et w0^2
+
+#define sgn(x) ((x) < 0 ? -1 : 1 )
 
 MeGyro gyro(1, 0x69);
  
@@ -54,12 +65,16 @@ volatile int pulse_duration[4] = {1000, 1000, 1000, 1000};
 int mode_mapping[4];
 
 //PID variables
-int roll_pulse_length_pid, pitch_pulse_length_pid, yaw_pulse_length_pid;
+volatile float roll_pulse_length_pid, pitch_pulse_length_pid, yaw_pulse_length_pid;
 volatile float angles[4];
 volatile float previous_angles[4];
 volatile float error_pulse_length[4];
 volatile float previous_error_pulse_length[4] = {0.,0.,0.,0.};
+
+volatile float w1, w1Square, w2, w2Square, w3, w3Square, w4, w4Square, Throttle_PID, Roll_PID, Pitch_PID, Yaw_PID;
+
 unsigned long previous_time;
+unsigned long delta_t;
 
 
 /**
@@ -131,18 +146,19 @@ if (difference_init<10000){
       }
    }
 
-  calcul=(pulse_duration[mode_mapping[ROLL]]-1500)/COMMAND_REDUCTION_COEF;
+  calcul=(pulse_duration[mode_mapping[ROLL]]-1500);
   roll_pulse_length=abs(calcul)/calcul * round(abs(calcul));
 
-  calcul=(pulse_duration[mode_mapping[PITCH]]-1500)/COMMAND_REDUCTION_COEF;
+  calcul=(pulse_duration[mode_mapping[PITCH]]-1500);
   pitch_pulse_length=abs(calcul)/calcul * round(abs(calcul));
 
-  calcul=(pulse_duration[mode_mapping[YAW]]-1500)/COMMAND_REDUCTION_COEF;
+  calcul=(pulse_duration[mode_mapping[YAW]]-1500);
   yaw_pulse_length=abs(calcul)/calcul * round(abs(calcul));
 
   throttle_pulse_length=round(pulse_duration[mode_mapping[THROTTLE]]);
 
-  if (throttle_pulse_length >= 1012){
+  if (throttle_pulse_length >= 1050){
+  //if(1){
     //memorize previous angles
     previous_angles[YAW]=angles[YAW];
     previous_angles[PITCH]=angles[PITCH];
@@ -155,48 +171,99 @@ if (difference_init<10000){
     
     //memorize time difference in between angle mesures
     now = micros();
-    difference=now-previous_time;
+    delta_t=now-previous_time;
     
     //compute pid
-    error_pulse_length[ROLL] = angles[ROLL]*100/4+1500 - roll_pulse_length ;
-    roll_pulse_length_pid = error_pulse_length[ROLL] * COEF_KP + (  error_pulse_length[ROLL]- previous_error_pulse_length[ROLL] ) / difference * COEF_KD ;
-    roll_pulse_length_pid = minMax(roll_pulse_length_pid, -400 , 400);
+    Serial.println("\n---------------");
+    
+    error_pulse_length[ROLL] =  angles[ROLL]*100./4. - 0.*roll_pulse_length ;
+    roll_pulse_length_pid = error_pulse_length[ROLL] * COEF_KP + (  error_pulse_length[ROLL]- previous_error_pulse_length[ROLL] ) / delta_t * COEF_KD ;
     previous_error_pulse_length[ROLL] = error_pulse_length[ROLL];
+    //roll_pulse_length_pid = minMax(roll_pulse_length_pid, -400 , 400)/COMMAND_REDUCTION_COEF;
+    Serial.println("roll angle : ");Serial.println(angles[ROLL]);
+    Serial.println("error_pulse_length[ROLL] :"); Serial.println(error_pulse_length[ROLL]);
+    
 
-    error_pulse_length[PITCH] = angles[PITCH]*100/4+1500 - pitch_pulse_length ;
-    pitch_pulse_length_pid = error_pulse_length[PITCH] * COEF_KP + (  error_pulse_length[PITCH]- previous_error_pulse_length[PITCH] ) / difference * COEF_KD ;
-    pitch_pulse_length_pid = minMax(pitch_pulse_length_pid, -400, 400);
+    error_pulse_length[PITCH] = angles[PITCH]*100./4. - 0.*pitch_pulse_length ;
+    pitch_pulse_length_pid = error_pulse_length[PITCH] * COEF_KP + (  error_pulse_length[PITCH]- previous_error_pulse_length[PITCH] ) / delta_t * COEF_KD ;
     previous_error_pulse_length[ROLL] = error_pulse_length[ROLL];
+    //pitch_pulse_length_pid = minMax(pitch_pulse_length_pid, -400, 400)/COMMAND_REDUCTION_COEF;
+    Serial.println("pitch angle : ");Serial.println(angles[PITCH]);
+    Serial.println("error_pulse_length[PITCH] :"); Serial.println(error_pulse_length[PITCH]);
 
-    error_pulse_length[YAW] = angles[YAW]*100/4+1500 - yaw_pulse_length ;
-    yaw_pulse_length_pid = error_pulse_length[YAW] * COEF_KP + (  error_pulse_length[YAW]- previous_error_pulse_length[YAW] ) / difference * COEF_KD ;
-    yaw_pulse_length_pid = minMax(yaw_pulse_length_pid, -400, 400);
+
+    error_pulse_length[YAW] = angles[YAW]*100./4. - 0.*yaw_pulse_length ;
+    yaw_pulse_length_pid = error_pulse_length[YAW] * COEF_KP + (  error_pulse_length[YAW]- previous_error_pulse_length[YAW] ) / delta_t * COEF_KD ;
     previous_error_pulse_length[YAW] = error_pulse_length[YAW];
+    //yaw_pulse_length_pid = minMax(yaw_pulse_length_pid, -400, 400)/COMMAND_REDUCTION_COEF;
+    previous_error_pulse_length[YAW] = error_pulse_length[YAW];
+    Serial.println("yaw angle : ");Serial.println(angles[YAW]);
+    Serial.println("error_pulse_length[YAW] :"); Serial.println(error_pulse_length[YAW]);
 
+
+w1Square = CYaw*yaw_pulse_length_pid-roll_pulse_length_pid -pitch_pulse_length_pid;
+w2Square = -CYaw*yaw_pulse_length_pid+roll_pulse_length_pid -pitch_pulse_length_pid;
+w3Square = -CYaw*yaw_pulse_length_pid-roll_pulse_length_pid +pitch_pulse_length_pid;
+w4Square = CYaw*yaw_pulse_length_pid+roll_pulse_length_pid +pitch_pulse_length_pid;
+
+w1 = sqrt(abs(w1Square))*sgn(w1Square);
+w2 = sqrt(abs(w2Square))*sgn(w2Square);
+w3 = sqrt(abs(w3Square))*sgn(w3Square);
+w4 = sqrt(abs(w4Square))*sgn(w4Square);
+
+Throttle_PID = w1+w2+w3+w4;
+Roll_PID =  -w1+w2-w3+w4;
+Pitch_PID =  -w1-w2+w3+w4;
+Yaw_PID =  +w1-w2-w3+w4;
+
+throttle_pulse_length = throttle_pulse_length + sgn(Throttle_PID)*round(abs(Throttle_PID));
+
+roll_pulse_length = sgn(Roll_PID)*round(abs(Roll_PID));
+pitch_pulse_length= sgn(Pitch_PID)*round(abs(Pitch_PID));
+yaw_pulse_length= sgn(Yaw_PID)*round(abs(Yaw_PID));
+
+Serial.println("throttle_pulse_length :"); Serial.println(throttle_pulse_length);
+Serial.println("roll_pulse_length :"); Serial.println(roll_pulse_length);
+Serial.println("pitch_pulse_length :"); Serial.println(pitch_pulse_length);
+Serial.println("yaw_pulse_length :"); Serial.println(yaw_pulse_length);
+
+/*
     roll_pulse_length=abs(roll_pulse_length_pid)/roll_pulse_length_pid * round(abs(roll_pulse_length_pid));
     pitch_pulse_length=abs(pitch_pulse_length_pid)/pitch_pulse_length_pid * round(abs(pitch_pulse_length_pid));
     yaw_pulse_length=abs(yaw_pulse_length_pid)/yaw_pulse_length_pid * round(abs(yaw_pulse_length_pid));
+*/
 
     previous_time=now;
+  }else {
+   calcul=roll_pulse_length/COMMAND_REDUCTION_COEF;
+    roll_pulse_length=abs(calcul)/calcul * round(abs(calcul));
+    calcul=pitch_pulse_length/COMMAND_REDUCTION_COEF;
+    pitch_pulse_length=abs(calcul)/calcul * round(abs(calcul));
+    calcul=yaw_pulse_length/COMMAND_REDUCTION_COEF;
+    yaw_pulse_length=abs(calcul)/calcul * round(abs(calcul));
   }
   
- 
-
   //Calibration des moteurs
 
-  pulse_length_escA = REDUCE_MOTOR_A*( COEF_THROTTLE*throttle_pulse_length - COEF_PITCH_ROLL*roll_pulse_length - COEF_PITCH_ROLL*pitch_pulse_length + COEF_YAW*yaw_pulse_length );
+  pulse_length_escA = REDUCE_MOTOR_A*( COEF_THROTTLE*throttle_pulse_length + COEF_PITCH_ROLL*roll_pulse_length - COEF_PITCH_ROLL*pitch_pulse_length + COEF_YAW*yaw_pulse_length );
 
-  pulse_length_escB = REDUCE_MOTOR_B*( COEF_THROTTLE*throttle_pulse_length + COEF_PITCH_ROLL*roll_pulse_length - COEF_PITCH_ROLL*pitch_pulse_length - COEF_YAW*yaw_pulse_length );
+  pulse_length_escB = REDUCE_MOTOR_B*( COEF_THROTTLE*throttle_pulse_length - COEF_PITCH_ROLL*roll_pulse_length - COEF_PITCH_ROLL*pitch_pulse_length - COEF_YAW*yaw_pulse_length );
 
-  pulse_length_escC = REDUCE_MOTOR_C*( COEF_THROTTLE*throttle_pulse_length - COEF_PITCH_ROLL*roll_pulse_length + COEF_PITCH_ROLL*pitch_pulse_length - COEF_YAW*yaw_pulse_length );
+  pulse_length_escC = REDUCE_MOTOR_C*( COEF_THROTTLE*throttle_pulse_length + COEF_PITCH_ROLL*roll_pulse_length + COEF_PITCH_ROLL*pitch_pulse_length - COEF_YAW*yaw_pulse_length );
 
-  pulse_length_escD = REDUCE_MOTOR_D*( COEF_THROTTLE*throttle_pulse_length + COEF_PITCH_ROLL*roll_pulse_length + COEF_PITCH_ROLL*pitch_pulse_length + COEF_YAW*yaw_pulse_length );
+  pulse_length_escD = REDUCE_MOTOR_D*( COEF_THROTTLE*throttle_pulse_length - COEF_PITCH_ROLL*roll_pulse_length + COEF_PITCH_ROLL*pitch_pulse_length + COEF_YAW*yaw_pulse_length );
 
 
   pulse_length_escA=minMax(pulse_length_escA,1000,2000);
   pulse_length_escB=minMax(pulse_length_escB,1000,2000);
   pulse_length_escC=minMax(pulse_length_escC,1000,2000);
   pulse_length_escD=minMax(pulse_length_escD,1000,2000);
+
+  Serial.println("pulse_length_escA :"); Serial.println(pulse_length_escA);
+  Serial.println("pulse_length_escB :"); Serial.println(pulse_length_escB);
+  Serial.println("pulse_length_escC :"); Serial.println(pulse_length_escC);
+  Serial.println("pulse_length_escD :"); Serial.println(pulse_length_escD);
+
 
  
 
