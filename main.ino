@@ -243,8 +243,6 @@ yaw_pulse_length= sgn(Yaw_PID)*round(abs(Yaw_PID));
     Serial.println("roll_pulse_length :"); Serial.println(roll_pulse_length);
     Serial.println("pitch_pulse_length :"); Serial.println(pitch_pulse_length);*/
   }
-    calcul=yaw_pulse_length/COMMAND_REDUCTION_COEF;
-    //Serial.println("yaw_pulse_length :"); Serial.println(yaw_pulse_length);
 
   //Calibration des moteurs
 
