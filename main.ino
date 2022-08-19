@@ -15,10 +15,10 @@
 
 #define COMMAND_REDUCTION_COEF  3  //reduces the intensity of the command on roll and pitch and yaw received from the transmitter
 
-#define REDUCE_MOTOR_A  1
-#define REDUCE_MOTOR_B  1
+#define REDUCE_MOTOR_A  1.33
+#define REDUCE_MOTOR_B  0.68
 #define REDUCE_MOTOR_C  1
-#define REDUCE_MOTOR_D  0.92
+#define REDUCE_MOTOR_D  0.58
 
 #define COEF_THROTTLE   1
 #define COEF_PITCH_ROLL 1
@@ -30,11 +30,11 @@
 // Kd = -2 * m * w0 * I
 // m = 0.7
 // w0 = 4 / (m*ts)
-// ts = 2 / k0
+// ts = 3 / k0
 // k0 = 2
 
-#define COEF_KP -8//-7.9184 //-0.15     //les coefficients sont proportionnels à I donc à modifier proportionnellement
-#define COEF_KD -0.02//-1.94   //-0.04     //ou à modifier en changeant w0 et w0^2
+#define COEF_KP -8.45//-7.9184 //-0.15     //les coefficients sont proportionnels à I donc à modifier proportionnellement
+#define COEF_KD -3.1//-1.94   //-0.04     //ou à modifier en changeant w0 et w0^2
 
 #define sgn(x) ((x) < 0 ? -1 : 1 )
 
@@ -155,10 +155,10 @@ if (difference_init<10000){
   calcul=(pulse_duration[mode_mapping[YAW]]-1500);
   yaw_pulse_length=abs(calcul)/calcul * round(abs(calcul));
 
-  throttle_pulse_length=round(pulse_duration[mode_mapping[THROTTLE]]);
+  throttle_pulse_length=round(pulse_duration[mode_mapping[THROTTLE]]-1000);
    //Serial.println("throttle_pulse_length");Serial.println(throttle_pulse_length);
 
-  if (throttle_pulse_length >= 1050){
+  if (throttle_pulse_length >= 50){
   //if(0){
     //memorize previous angles
     previous_angles[YAW]=angles[YAW];
@@ -192,16 +192,42 @@ if (difference_init<10000){
     //Serial.println("pitch angle : ");Serial.println(angles[PITCH]);
     //Serial.println("error_pulse_length[PITCH] :"); Serial.println(error_pulse_length[PITCH]);
 
-    error_pulse_length[YAW] = angles[YAW]*100./4. - 0.*yaw_pulse_length ;
+    error_pulse_length[YAW] = 0.*angles[YAW]*100./4. - 0.*yaw_pulse_length ;
     yaw_pulse_length_pid = error_pulse_length[YAW] * COEF_KP + (  error_pulse_length[YAW]- previous_error_pulse_length[YAW] ) / delta_t * COEF_KD ;
     previous_error_pulse_length[YAW] = error_pulse_length[YAW];
-    previous_error_pulse_length[YAW] = error_pulse_length[YAW];
+
+/*
+volatile float foo;
+foo = pitch_pulse_length_pid;
+pitch_pulse_length_pid = roll_pulse_length_pid;
+roll_pulse_length_pid = foo;
+foo=roll_pulse_length_pid;
+roll_pulse_length_pid=yaw_pulse_length_pid;
+yaw_pulse_length_pid=foo;
 
 
-w1Square =CYaw*yaw_pulse_length_pid-roll_pulse_length_pid -pitch_pulse_length_pid;
-w2Square =-CYaw*yaw_pulse_length_pid+roll_pulse_length_pid -pitch_pulse_length_pid;
-w3Square =-CYaw*yaw_pulse_length_pid-roll_pulse_length_pid +pitch_pulse_length_pid;
-w4Square =CYaw*yaw_pulse_length_pid+roll_pulse_length_pid +pitch_pulse_length_pid;
+w1Square =CYaw*yaw_pulse_length_pid  + (-roll_pulse_length_pid +pitch_pulse_length_pid)/COMMAND_REDUCTION_COEF;
+w2Square =-CYaw*yaw_pulse_length_pid + (-roll_pulse_length_pid -pitch_pulse_length_pid)/COMMAND_REDUCTION_COEF;
+w3Square =CYaw*yaw_pulse_length_pid + (roll_pulse_length_pid -pitch_pulse_length_pid)/COMMAND_REDUCTION_COEF;
+w4Square =-CYaw*yaw_pulse_length_pid+ (roll_pulse_length_pid +pitch_pulse_length_pid)/COMMAND_REDUCTION_COEF;
+
+w1 = sqrt(abs(w1Square))*sgn(w1Square);
+w2 = sqrt(abs(w2Square))*sgn(w2Square);
+w3 = sqrt(abs(w3Square))*sgn(w3Square);
+w4 = sqrt(abs(w4Square))*sgn(w4Square);
+
+Throttle_PID = w1+w2+w3+w4;
+Roll_PID =     w1-w2+w3-w4;
+Pitch_PID =   -w1-w2+w3+w4;
+Yaw_PID =      w1-w2-w3+w4;
+*/
+
+volatile float uT2;
+uT2 = pow((throttle_pulse_length)/4., 2);
+w1Square = uT2 + CYaw*yaw_pulse_length_pid + (-roll_pulse_length_pid -pitch_pulse_length_pid)/COMMAND_REDUCTION_COEF;
+w2Square = uT2 -CYaw*yaw_pulse_length_pid + (roll_pulse_length_pid -pitch_pulse_length_pid)/COMMAND_REDUCTION_COEF;
+w3Square = uT2 -CYaw*yaw_pulse_length_pid + (-roll_pulse_length_pid +pitch_pulse_length_pid)/COMMAND_REDUCTION_COEF;
+w4Square = uT2 +CYaw*yaw_pulse_length_pid  + (roll_pulse_length_pid +pitch_pulse_length_pid)/COMMAND_REDUCTION_COEF;
 
 w1 = sqrt(abs(w1Square))*sgn(w1Square);
 w2 = sqrt(abs(w2Square))*sgn(w2Square);
@@ -214,7 +240,7 @@ Pitch_PID =  -w1-w2+w3+w4;
 Yaw_PID =  +w1-w2-w3+w4;
 
 
-throttle_pulse_length = throttle_pulse_length + sgn(Throttle_PID)*round(abs(Throttle_PID));
+throttle_pulse_length = sgn(Throttle_PID)*round(abs(Throttle_PID));
 
 roll_pulse_length = sgn(Roll_PID)*round(abs(Roll_PID));
 pitch_pulse_length= sgn(Pitch_PID)*round(abs(Pitch_PID));
@@ -225,19 +251,16 @@ yaw_pulse_length= sgn(Yaw_PID)*round(abs(Yaw_PID));
 //Serial.println("roll_pulse_length :"); Serial.println(roll_pulse_length);
 //Serial.println("pitch_pulse_length :"); Serial.println(pitch_pulse_length);
 
-/*
-    roll_pulse_length=abs(roll_pulse_length_pid)/roll_pulse_length_pid * round(abs(roll_pulse_length_pid));
-    pitch_pulse_length=abs(pitch_pulse_length_pid)/pitch_pulse_length_pid * round(abs(pitch_pulse_length_pid));
-    yaw_pulse_length=abs(yaw_pulse_length_pid)/yaw_pulse_length_pid * round(abs(yaw_pulse_length_pid));
-*/
+
 
     previous_time=now;
   }else {
     calcul=roll_pulse_length/COMMAND_REDUCTION_COEF;
-    roll_pulse_length=abs(calcul)/calcul * round(abs(calcul));
+    roll_pulse_length=sgn(calcul) * round(abs(calcul));
     calcul=pitch_pulse_length/COMMAND_REDUCTION_COEF;
-    pitch_pulse_length=abs(calcul)/calcul * round(abs(calcul));
-    yaw_pulse_length=abs(calcul)/calcul * round(abs(calcul));
+    pitch_pulse_length=sgn(calcul) * round(abs(calcul));
+    calcul=yaw_pulse_length/COMMAND_REDUCTION_COEF;
+    yaw_pulse_length=sgn(calcul) * round(abs(calcul));
 
 /*    Serial.println("throttle_pulse_length :"); Serial.println(throttle_pulse_length);
     Serial.println("roll_pulse_length :"); Serial.println(roll_pulse_length);
@@ -246,13 +269,13 @@ yaw_pulse_length= sgn(Yaw_PID)*round(abs(Yaw_PID));
 
   //Calibration des moteurs
 
-  pulse_length_escA = REDUCE_MOTOR_A*( COEF_THROTTLE*throttle_pulse_length + COEF_PITCH_ROLL*roll_pulse_length - COEF_PITCH_ROLL*pitch_pulse_length + COEF_YAW*yaw_pulse_length );
+  pulse_length_escA = 1000 + REDUCE_MOTOR_A*( COEF_THROTTLE*throttle_pulse_length + COEF_PITCH_ROLL*roll_pulse_length - COEF_PITCH_ROLL*pitch_pulse_length + COEF_YAW*yaw_pulse_length );
 
-  pulse_length_escB = REDUCE_MOTOR_B*( COEF_THROTTLE*throttle_pulse_length - COEF_PITCH_ROLL*roll_pulse_length - COEF_PITCH_ROLL*pitch_pulse_length - COEF_YAW*yaw_pulse_length );
+  pulse_length_escB = 1000 + REDUCE_MOTOR_B*( COEF_THROTTLE*throttle_pulse_length - COEF_PITCH_ROLL*roll_pulse_length - COEF_PITCH_ROLL*pitch_pulse_length - COEF_YAW*yaw_pulse_length );
 
-  pulse_length_escC = REDUCE_MOTOR_C*( COEF_THROTTLE*throttle_pulse_length + COEF_PITCH_ROLL*roll_pulse_length + COEF_PITCH_ROLL*pitch_pulse_length - COEF_YAW*yaw_pulse_length );
+  pulse_length_escC = 1000 + REDUCE_MOTOR_C*( COEF_THROTTLE*throttle_pulse_length + COEF_PITCH_ROLL*roll_pulse_length + COEF_PITCH_ROLL*pitch_pulse_length - COEF_YAW*yaw_pulse_length );
 
-  pulse_length_escD = REDUCE_MOTOR_D*( COEF_THROTTLE*throttle_pulse_length - COEF_PITCH_ROLL*roll_pulse_length + COEF_PITCH_ROLL*pitch_pulse_length + COEF_YAW*yaw_pulse_length );
+  pulse_length_escD = 1000 + REDUCE_MOTOR_D*( COEF_THROTTLE*throttle_pulse_length - COEF_PITCH_ROLL*roll_pulse_length + COEF_PITCH_ROLL*pitch_pulse_length + COEF_YAW*yaw_pulse_length );
 
 
   pulse_length_escA=minMax(pulse_length_escA,1000,2000);
@@ -284,7 +307,7 @@ yaw_pulse_length= sgn(Yaw_PID)*round(abs(Yaw_PID));
         now = micros();
         difference = now - loop_timer;
 
-        if ((difference >= pulse_length_escA)&&(!testA)) {PORTH &= ~(1<<PORTH5);testA=1;} // Passe la broche #H5 à LOW PORTH &= B11011111;Serial.println("A");
+        if ((difference >= pulse_length_escA)&&(!testA))  {PORTH &= ~(1<<PORTH5);testA=1;} // Passe la broche #H5 à LOW PORTH &= B11011111;Serial.println("A");
         if ((difference >= pulse_length_escB)&&(!testB))  {PORTH &= ~(1<<PORTH6);testB=1;} // Passe la broche #H6 à LOW PORTH &= B10111111;Serial.println("B");
         if ((difference >= pulse_length_escC)&&(!testC))  {PORTH &= ~(1<<PORTH3);testC=1;} // Passe la broche #H3 à LOW PORTH &= B11110111;Serial.println("C");
         if ((difference >= pulse_length_escD)&&(!testD))  {PORTH &= ~(1<<PORTH4);testD=1;} // Passe la broche #H4 à LOW PORTH &= B11101111;Serial.println("D");
