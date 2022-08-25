@@ -1,6 +1,8 @@
 #include "MeAuriga.h"
 #include <Wire.h>
 
+#define ALLLEDS        0
+#define LEDNUM  12
 
 #define CHANNEL1 0
 #define CHANNEL2 1
@@ -12,33 +14,36 @@
 #define ROLL     0
 #define THROTTLE 2
 
+#define MANUAL_MODE 0 //1 to go into manual mode and 0 to use pid
 
 #define COMMAND_REDUCTION_COEF  3  //reduces the intensity of the command on roll and pitch and yaw received from the transmitter
 
-#define REDUCE_MOTOR_A  1.33
-#define REDUCE_MOTOR_B  0.68
-#define REDUCE_MOTOR_C  1
+#define REDUCE_MOTOR_A  1.23
+#define REDUCE_MOTOR_B  0.78
+#define REDUCE_MOTOR_C  0.95
 #define REDUCE_MOTOR_D  0.58
 
 #define COEF_THROTTLE   1
 #define COEF_PITCH_ROLL 1
 #define COEF_YAW        1
 
-#define CYaw        0.
+#define CYaw        -500
 
+// k0 = 2 //cf complementary filter
+// ts = 3 / k0  //settling time
+// w0 = 4 / (m*ts)  //natural frequency
+// m = 0.7 //damping ratio
 // Kp = -w0^2 * I
 // Kd = -2 * m * w0 * I
-// m = 0.7
-// w0 = 4 / (m*ts)
-// ts = 3 / k0
-// k0 = 2
 
-#define COEF_KP -8.45//-7.9184 //-0.15     //les coefficients sont proportionnels à I donc à modifier proportionnellement
-#define COEF_KD -3.1//-1.94   //-0.04     //ou à modifier en changeant w0 et w0^2
+
+#define COEF_KP -8.45//-7.9184 //-0.15     //coefficients are proportional to I (inertia) so they should be modified proportionally
+#define COEF_KD -3.1//-1.94   //-0.04     //otherwise they can be modified by changing w0 and w0^2
 
 #define sgn(x) ((x) < 0 ? -1 : 1 )
 
 MeGyro gyro(1, 0x69);
+MeRGBLed led( 0, LEDNUM );
  
 volatile unsigned long current_time;
 unsigned long now, now_init, attente;
@@ -66,16 +71,18 @@ int mode_mapping[4];
 
 //PID variables
 volatile float roll_pulse_length_pid, pitch_pulse_length_pid, yaw_pulse_length_pid;
-volatile float angles[4];
-volatile float previous_angles[4];
-volatile float error_pulse_length[4];
-volatile float previous_error_pulse_length[4] = {0.,0.,0.,0.};
-
+ float angles[4];
+ float previous_angles[4];
+ double error_pulse_length[4];
+ double previous_error_pulse_length[4] = {0.,0.,0.,0.};
+volatile float uT2;
 volatile float w1, w1Square, w2, w2Square, w3, w3Square, w4, w4Square, Throttle_PID, Roll_PID, Pitch_PID, Yaw_PID;
 
 unsigned long previous_time;
 unsigned long delta_t;
 
+//Display variables
+int passage;
 
 /**
 * Setup routine.
@@ -89,6 +96,7 @@ void setup()
 
     Serial.begin(9600);
     gyro.begin();
+    led.setpin( 44 );
 
     // Customize mapping of controls: set here which command is on wich channel.
 
@@ -97,10 +105,10 @@ void setup()
     mode_mapping[ROLL]     = CHANNEL1;
     mode_mapping[THROTTLE] = CHANNEL3;
 
-    DDRH |=B01111000;//port PH5, PH6, PH3 and PH4 en sortie
-    DDRK &= B00111001;//port PK2,PK7,PK1,PK6 en entrée 
+    DDRH |=B01111000;//output port PH5, PH6, PH3 and PH4
+    DDRK &= B00111001;//input port PK2,PK7,PK1,PK6
 
-    PCICR |= B00000100; // groupe PCIE2=1 (PCINT23..16) 17,18,22,23
+    PCICR |= B00000100; // group PCIE2=1 (PCINT23..16) 17,18,22,23
 
     PCMSK2 |= (1 << PCINT17); //Set PCINT17 (digital input A9, PK1) to trigger an interrupt on state change.
     PCMSK2 |= (1 << PCINT18); //Set PCINT18 (digital input A10, PK2)to trigger an interrupt on state change.
@@ -129,19 +137,24 @@ void setup()
 void loop()
 
 {
+now=micros();
+//Optional to check that a cycle is under 4000 micros seconds
+if(now-now_init<=4030){led.setColorAt( 3, 0, 255, 0 );led.setColorAt( 2, 0, 0, 0 );}
+if(now-now_init>4030){led.setColorAt( 3, 0, 0, 0 );led.setColorAt( 2, 255, 0, 0 );}
+led.show();
+//Serial.println(now-now_init);
+now_init = now;
 
-now_init = micros();
 
 if (first) {loop_timer_init=now_init;first=0;}
 
 difference_init = now_init - loop_timer_init;
 
 if (difference_init<10000){
-
    for(int i=0;i<1000;i++){
-      PORTH |= B11111000; // On active les broches #3 #4 #5 #6 (et aussi 7 la lumiere bleue) du port D (état HIGH)
+      PORTH |= B11111000; // activates pins #3 #4 #5 #6 (and 7 the blue light) of port D (HIGH state)
       delay(1);
-      PORTH &= B10000111; //on les desactive le temps restant du cycle
+      PORTH &= B10000111; // deactivates for the rest of the cycle
       delay(3);
       }
    }
@@ -156,10 +169,8 @@ if (difference_init<10000){
   yaw_pulse_length=abs(calcul)/calcul * round(abs(calcul));
 
   throttle_pulse_length=round(pulse_duration[mode_mapping[THROTTLE]]-1000);
-   //Serial.println("throttle_pulse_length");Serial.println(throttle_pulse_length);
 
-  if (throttle_pulse_length >= 50){
-  //if(0){
+  if (!MANUAL_MODE && throttle_pulse_length >= 50){
     //memorize previous angles
     previous_angles[YAW]=angles[YAW];
     previous_angles[PITCH]=angles[PITCH];
@@ -169,65 +180,41 @@ if (difference_init<10000){
     angles[YAW]=gyro.getAngleZ();
     angles[PITCH]=gyro.getAngleX();
     angles[ROLL]=gyro.getAngleY();
+    //angleDisplay(300);
+
     
     //memorize time difference in between angle mesures
     now = micros();
     delta_t=now-previous_time;
     
-    //compute pid
+    //Compute pid
     //Serial.println("\n---------------");
     
-    error_pulse_length[ROLL] =  angles[ROLL]*100./4. - 0.*roll_pulse_length ;
-    roll_pulse_length_pid = error_pulse_length[ROLL] * COEF_KP + (  error_pulse_length[ROLL]- previous_error_pulse_length[ROLL] ) / delta_t * COEF_KD ;
-    previous_error_pulse_length[ROLL] = error_pulse_length[ROLL];
+    error_pulse_length[ROLL] =  angles[ROLL]*100./4. - roll_pulse_length ;
+    roll_pulse_length_pid = error_pulse_length[ROLL] * COEF_KP + (  error_pulse_length[ROLL]- previous_error_pulse_length[ROLL] ) * COEF_KD ;
     //roll_pulse_length_pid = minMax(roll_pulse_length_pid, -400 , 400)/COMMAND_REDUCTION_COEF;
-    //Serial.println("roll angle : ");Serial.println(angles[ROLL]);
-    //Serial.println("error_pulse_length[ROLL] :"); Serial.println(error_pulse_length[ROLL]);
+    //errorDisplay(80,ROLL,"roll");
+
+    error_pulse_length[PITCH] = angles[PITCH]*100./4. - pitch_pulse_length ;
+    pitch_pulse_length_pid = error_pulse_length[PITCH] * COEF_KP + (  error_pulse_length[PITCH]- previous_error_pulse_length[PITCH] ) * COEF_KD ;
+    //pitch_pulse_length_pid = minMax(pitch_pulse_length_pid, -400, 400)/COMMAND_REDUCTION_COEF;
+    //errorDisplay(80,PITCH,"pitch");
     
 
-    error_pulse_length[PITCH] = angles[PITCH]*100./4. - 0.*pitch_pulse_length ;
-    pitch_pulse_length_pid = error_pulse_length[PITCH] * COEF_KP + (  error_pulse_length[PITCH]- previous_error_pulse_length[PITCH] ) / delta_t * COEF_KD ;
-    previous_error_pulse_length[ROLL] = error_pulse_length[ROLL];
-    //pitch_pulse_length_pid = minMax(pitch_pulse_length_pid, -400, 400)/COMMAND_REDUCTION_COEF;
-    //Serial.println("pitch angle : ");Serial.println(angles[PITCH]);
-    //Serial.println("error_pulse_length[PITCH] :"); Serial.println(error_pulse_length[PITCH]);
+    error_pulse_length[YAW] = angles[YAW]*100./4. - yaw_pulse_length ;
+    yaw_pulse_length_pid = 0*error_pulse_length[YAW] * COEF_KP + (  error_pulse_length[YAW]- previous_error_pulse_length[YAW] ) * COEF_KD ;
+    //errorDisplay(80,YAW,"yaw");
 
-    error_pulse_length[YAW] = 0.*angles[YAW]*100./4. - 0.*yaw_pulse_length ;
-    yaw_pulse_length_pid = error_pulse_length[YAW] * COEF_KP + (  error_pulse_length[YAW]- previous_error_pulse_length[YAW] ) / delta_t * COEF_KD ;
+    previous_error_pulse_length[ROLL] = error_pulse_length[ROLL];
+    previous_error_pulse_length[PITCH] = error_pulse_length[PITCH];
     previous_error_pulse_length[YAW] = error_pulse_length[YAW];
 
-/*
-volatile float foo;
-foo = pitch_pulse_length_pid;
-pitch_pulse_length_pid = roll_pulse_length_pid;
-roll_pulse_length_pid = foo;
-foo=roll_pulse_length_pid;
-roll_pulse_length_pid=yaw_pulse_length_pid;
-yaw_pulse_length_pid=foo;
 
-
-w1Square =CYaw*yaw_pulse_length_pid  + (-roll_pulse_length_pid +pitch_pulse_length_pid)/COMMAND_REDUCTION_COEF;
-w2Square =-CYaw*yaw_pulse_length_pid + (-roll_pulse_length_pid -pitch_pulse_length_pid)/COMMAND_REDUCTION_COEF;
-w3Square =CYaw*yaw_pulse_length_pid + (roll_pulse_length_pid -pitch_pulse_length_pid)/COMMAND_REDUCTION_COEF;
-w4Square =-CYaw*yaw_pulse_length_pid+ (roll_pulse_length_pid +pitch_pulse_length_pid)/COMMAND_REDUCTION_COEF;
-
-w1 = sqrt(abs(w1Square))*sgn(w1Square);
-w2 = sqrt(abs(w2Square))*sgn(w2Square);
-w3 = sqrt(abs(w3Square))*sgn(w3Square);
-w4 = sqrt(abs(w4Square))*sgn(w4Square);
-
-Throttle_PID = w1+w2+w3+w4;
-Roll_PID =     w1-w2+w3-w4;
-Pitch_PID =   -w1-w2+w3+w4;
-Yaw_PID =      w1-w2-w3+w4;
-*/
-
-volatile float uT2;
 uT2 = pow((throttle_pulse_length)/4., 2);
-w1Square = uT2 + CYaw*yaw_pulse_length_pid + (-roll_pulse_length_pid -pitch_pulse_length_pid)/COMMAND_REDUCTION_COEF;
-w2Square = uT2 -CYaw*yaw_pulse_length_pid + (roll_pulse_length_pid -pitch_pulse_length_pid)/COMMAND_REDUCTION_COEF;
-w3Square = uT2 -CYaw*yaw_pulse_length_pid + (-roll_pulse_length_pid +pitch_pulse_length_pid)/COMMAND_REDUCTION_COEF;
-w4Square = uT2 +CYaw*yaw_pulse_length_pid  + (roll_pulse_length_pid +pitch_pulse_length_pid)/COMMAND_REDUCTION_COEF;
+w1Square = uT2 + (CYaw*yaw_pulse_length_pid -roll_pulse_length_pid -pitch_pulse_length_pid)/COMMAND_REDUCTION_COEF;
+w2Square = uT2 + (-CYaw*yaw_pulse_length_pid +roll_pulse_length_pid -pitch_pulse_length_pid)/COMMAND_REDUCTION_COEF;
+w3Square = uT2 + (-CYaw*yaw_pulse_length_pid -roll_pulse_length_pid +pitch_pulse_length_pid)/COMMAND_REDUCTION_COEF;
+w4Square = uT2 + (CYaw*yaw_pulse_length_pid +roll_pulse_length_pid +pitch_pulse_length_pid)/COMMAND_REDUCTION_COEF;
 
 w1 = sqrt(abs(w1Square))*sgn(w1Square);
 w2 = sqrt(abs(w2Square))*sgn(w2Square);
@@ -246,28 +233,30 @@ roll_pulse_length = sgn(Roll_PID)*round(abs(Roll_PID));
 pitch_pulse_length= sgn(Pitch_PID)*round(abs(Pitch_PID));
 yaw_pulse_length= sgn(Yaw_PID)*round(abs(Yaw_PID));
 
-
-//Serial.println("throttle_pulse_length :"); Serial.println(throttle_pulse_length);
-//Serial.println("roll_pulse_length :"); Serial.println(roll_pulse_length);
-//Serial.println("pitch_pulse_length :"); Serial.println(pitch_pulse_length);
-
-
-
     previous_time=now;
-  }else {
-    calcul=roll_pulse_length/COMMAND_REDUCTION_COEF;
-    roll_pulse_length=sgn(calcul) * round(abs(calcul));
-    calcul=pitch_pulse_length/COMMAND_REDUCTION_COEF;
-    pitch_pulse_length=sgn(calcul) * round(abs(calcul));
-    calcul=yaw_pulse_length/COMMAND_REDUCTION_COEF;
-    yaw_pulse_length=sgn(calcul) * round(abs(calcul));
-
-/*    Serial.println("throttle_pulse_length :"); Serial.println(throttle_pulse_length);
-    Serial.println("roll_pulse_length :"); Serial.println(roll_pulse_length);
-    Serial.println("pitch_pulse_length :"); Serial.println(pitch_pulse_length);*/
+    
   }
+  
+if(MANUAL_MODE || throttle_pulse_length < 50){
+    calcul=roll_pulse_length/COMMAND_REDUCTION_COEF;
+  roll_pulse_length=sgn(calcul) * round(abs(calcul));
+  roll_pulse_length=0; //optional
+    calcul=pitch_pulse_length/COMMAND_REDUCTION_COEF;
+  pitch_pulse_length=sgn(calcul) * round(abs(calcul));
+  pitch_pulse_length=0; //optional
+    calcul=yaw_pulse_length/COMMAND_REDUCTION_COEF;
+  yaw_pulse_length=sgn(calcul) * round(abs(calcul));
+  yaw_pulse_length=0; //optional
 
-  //Calibration des moteurs
+/*  //For display only :
+  gyro.update();
+  angles[YAW]=gyro.getAngleZ();
+  angles[PITCH]=gyro.getAngleX();
+  angles[ROLL]=gyro.getAngleY();
+  angleDisplay(300);*/
+}
+
+  //motor calibration
 
   pulse_length_escA = 1000 + REDUCE_MOTOR_A*( COEF_THROTTLE*throttle_pulse_length + COEF_PITCH_ROLL*roll_pulse_length - COEF_PITCH_ROLL*pitch_pulse_length + COEF_YAW*yaw_pulse_length );
 
@@ -283,20 +272,14 @@ yaw_pulse_length= sgn(Yaw_PID)*round(abs(Yaw_PID));
   pulse_length_escC=minMax(pulse_length_escC,1000,2000);
   pulse_length_escD=minMax(pulse_length_escD,1000,2000);
 
-/*
-  Serial.println("pulse_length_escA :"); Serial.println(pulse_length_escA);
-  Serial.println("pulse_length_escB :"); Serial.println(pulse_length_escB);
-  Serial.println("pulse_length_escC :"); Serial.println(pulse_length_escC);
-  Serial.println("pulse_length_escD :"); Serial.println(pulse_length_escD);
-*/
-
+  //motorDisplay();
  
-
-   // Fs = 250Hz : on envoie les impulsions toutes les 4000µs
+   //Sending pulses to ESCs
+   // Fs = 250Hz : impulse sent every 4000µs
    now = micros();
    loop_timer = now;
 
-  // On active les broches #3 #4 #5 #6 (et aussi 7 la lumiere bleue) du port D (état HIGH)
+  // activates pins #3 #4 #5 #6 (and 7 the blue light) of port D (HIGH state)
    PORTH |= B11111000;
    testA=testB=testC=testD=0;
 
@@ -314,18 +297,20 @@ yaw_pulse_length= sgn(Yaw_PID)*round(abs(Yaw_PID));
     }
 
     //PORTH &= B01111111;
-    attente=4000-difference;
-    delayMicroseconds(attente); 
+    now=micros();
+    //attente=4000-now+now_init;
+    //delayMicroseconds(attente); 
+    while((now=micros())-now_init<4000){}
 }
 
 
  
 /**
-* Calcul de minmax
+* Minmax computing
 *
-* @param float a  Valeur à comparer
-* @param float b  Borne inférieure
-* @param float c  Borne supérieure
+* @param float a  Variable to be compared
+* @param float b  Lower boundary
+* @param float c  Higher boundary
 * @return float
 */
 
@@ -334,7 +319,35 @@ float minMax ( float a , float b , float c ) {
   result = max(result,b);
   return result;
 }
- 
+
+//Debuguing functions :
+
+void angleDisplay(int frequency) {
+  if (passage==frequency){
+    Serial.println("\n---------------");
+    Serial.println("roll angle : ");  Serial.println(angles[ROLL]);
+    Serial.println("pitch angle : "); Serial.println(angles[PITCH]);
+    Serial.println("yaw angle : ");   Serial.println(angles[YAW]);
+    Serial.print("time elapsed : ");  Serial.print(difference_init/1000);Serial.print("ms");
+    passage=0;
+  }else{passage+=1;}
+}
+
+void errorDisplay(int frequency, int angle, String name_angle) {
+  if (passage==frequency){passage=0;
+    Serial.println("erreur :");     Serial.println((error_pulse_length[YAW]- previous_error_pulse_length[YAW] ) * COEF_KD);
+    Serial.println(name_angle);          Serial.println(error_pulse_length[YAW]);
+    Serial.print("previous");Serial.print(name_angle); Serial.println(previous_error_pulse_length[YAW]);
+    Serial.println("delta_t");      Serial.println(delta_t);
+  }else {passage+=1;}
+}
+
+void motorDisplay(){
+  Serial.println("pulse_length_escA :"); Serial.println(pulse_length_escA);
+  Serial.println("pulse_length_escB :"); Serial.println(pulse_length_escB);
+  Serial.println("pulse_length_escC :"); Serial.println(pulse_length_escC);
+  Serial.println("pulse_length_escD :"); Serial.println(pulse_length_escD);
+}
 
 /**
 * This Interrupt Sub Routine is called each time input 8, 9, 10 or 11 changed state.
@@ -362,6 +375,7 @@ ISR(PCINT2_vect)
     } else if(previous_state[CHANNEL1] == HIGH) {                  // Input A9, PK1 changed from 1 to 0 (falling edge)
         previous_state[CHANNEL1] = LOW;                            // Save current state
         pulse_duration[CHANNEL1] = current_time - timer[CHANNEL1]; // Stop timer & calculate pulse duration
+        //Serial.println("pulse_duration[CHANNEL1]");Serial.println(pulse_duration[CHANNEL1]);
     }
  
     // Channel 2 -------------------------------------------------
@@ -373,6 +387,7 @@ ISR(PCINT2_vect)
     } else if(previous_state[CHANNEL2] == HIGH) {                  // Input A10 changed from 1 to 0 (falling edge)
         previous_state[CHANNEL2] = LOW;                            // Save current state
         pulse_duration[CHANNEL2] = current_time - timer[CHANNEL2]; // Stop timer & calculate pulse duration
+        //Serial.println("pulse_duration[CHANNEL2]");Serial.println(pulse_duration[CHANNEL2]);
     }
  
     // Channel 3 -------------------------------------------------
@@ -384,6 +399,7 @@ ISR(PCINT2_vect)
     } else if(previous_state[CHANNEL3] == HIGH) {                  // Input A14 changed from 1 to 0 (falling edge)
         previous_state[CHANNEL3] = LOW;                            // Save current state
         pulse_duration[CHANNEL3] = current_time - timer[CHANNEL3]; // Stop timer & calculate pulse duration
+        //Serial.println("pulse_duration[CHANNEL3]");Serial.println(pulse_duration[CHANNEL3]);
     }
  
     // Channel 4 -------------------------------------------------
@@ -395,6 +411,7 @@ ISR(PCINT2_vect)
     } else if(previous_state[CHANNEL4] == HIGH) {                  // Input 15 changed from 1 to 0 (falling edge)
         previous_state[CHANNEL4] = LOW;                            // Save current state
         pulse_duration[CHANNEL4] = current_time - timer[CHANNEL4]; // Stop timer & calculate pulse duration
+        //Serial.println("pulse_duration[CHANNEL4]");Serial.println(pulse_duration[CHANNEL4]);
     }
 }
  
