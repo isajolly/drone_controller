@@ -14,7 +14,7 @@
 #define ROLL     0
 #define THROTTLE 2
 
-#define MANUAL_MODE 0 //1 to go into manual mode and 0 to use pid
+#define MANUAL_MODE 0   // 1 to go into manual mode and 0 to use angular corrections
 
 #define COMMAND_REDUCTION_COEF  3.  //reduces the intensity of the command on roll and pitch and yaw received from the transmitter
 
@@ -29,16 +29,17 @@
 
 #define CYaw        5.
 
-// k0 = 2 //cf complementary filter
-// ts = 3 / k0  //settling time
-// w0 = 4 / (m*ts)  //natural frequency
-// m = 0.7 //damping ratio
-// Kp = -w0^2 * I
-// Kd = -2 * m * w0 * I
+/*Relation of PD coefficients to other coefficients :
+      k0 = 2 //cf complementary filter
+      ts = 3 / k0  //settling time
+      w0 = 4 / (m*ts)  //natural frequency
+      m = 0.7 //damping ratio
+      Kp = -w0^2 * I
+      Kd = -2 * m * w0 * I
+*/
 
-
-#define COEF_KP -8.45//-7.9184 //-0.15     //coefficients are proportional to I (inertia) so they should be modified proportionally
-#define COEF_KD -3.1//-1.94   //-0.04     //otherwise they can be modified by changing w0 and w0^2
+#define COEF_KP   -8.45//-7.9184 //-0.15     //coefficients are proportional to I (inertia) so they should be modified proportionally
+#define COEF_KD   -3.1//-1.94   //-0.04     //otherwise they can be modified by changing w0 and w0^2
 
 #define sgn(x) ((x) < 0 ? -1 : 1 )
 
@@ -49,21 +50,16 @@ volatile unsigned long current_time;
 unsigned long now, now_init, attente;
 unsigned long loop_timer,loop_timer_init;
 unsigned long difference,difference_init;
-unsigned long timer_channel_1, timer_channel_2, timer_channel_3, timer_channel_4, esc_timer, esc_loop_timer;
+volatile unsigned long timer[4];
 
 int throttle_pulse_length, roll_pulse_length, pitch_pulse_length, yaw_pulse_length;
 float calcul;
-unsigned int testA,testB,testC,testD;
 unsigned int  pulse_length_escA, pulse_length_escB, pulse_length_escC, pulse_length_escD;
-
-unsigned long zero_timer;
-volatile unsigned long timer[4];
-
-int n;
 int first;
 
 // Previous state of each channel (HIGH or LOW)
 volatile byte previous_state[4];
+unsigned int testA,testB,testC,testD;
 
 // Duration of the pulse on each channel in µs (must be within 1000µs & 2000µs)
 volatile int pulse_duration[4] = {1000, 1000, 1000, 1000};
@@ -71,10 +67,10 @@ int mode_mapping[4];
 
 //PID variables
 float roll_pulse_length_pid, pitch_pulse_length_pid, yaw_pulse_length_pid;
- float angles[4];
- float previous_angles[4];
- double error_pulse_length[4];
- double previous_error_pulse_length[4] = {0.,0.,0.,0.};
+float angles[4];
+float previous_angles[4];
+double error_pulse_length[4];
+double previous_error_pulse_length[4] = {0.,0.,0.,0.};
 float uT2;
 float w1, w1Square, w2, w2Square, w3, w3Square, w4, w4Square, Throttle_PID, Roll_PID, Pitch_PID, Yaw_PID;
 
@@ -117,8 +113,6 @@ void setup()
     PCMSK2 |= (1 << PCINT22); //Set PCINT22 (digital input A14, PK6)to trigger an interrupt on state change.
     PCMSK2 |= (1 << PCINT23); //Set PCINT23 (digital input A15, PK7)to trigger an interrupt on state change.
    
-    zero_timer = micros();
-    n=0;
     first=1;
     difference_init=0;
     now = micros();
@@ -140,7 +134,7 @@ void loop()
 
 {
 now=micros();
-//Optional to check that a cycle is under a certain amount of micros seconds
+//Optional to check that a cycle is under a certain amount of micros seconds. Can be used to see the end of set up.
 if(now-now_init<=6030){led.setColorAt( 3, 0, 255, 0 );led.setColorAt( 2, 0, 0, 0 );}
 if(now-now_init>6030){led.setColorAt( 3, 0, 0, 0 );led.setColorAt( 2, 255, 0, 0 );}
 led.show();
@@ -161,19 +155,15 @@ if (difference_init<10000){
       }
    }
 
-  calcul=(pulse_duration[mode_mapping[ROLL]]-1500);
-  roll_pulse_length=sgn(calcul) * round(fabs(calcul));
+  // Adjusting pulse to scale
+  roll_pulse_length=pulse_duration[mode_mapping[ROLL]]-1500;
+  pitch_pulse_length=pulse_duration[mode_mapping[PITCH]]-1500;
+  yaw_pulse_length=pulse_duration[mode_mapping[YAW]]-1500;
+  throttle_pulse_length=pulse_duration[mode_mapping[THROTTLE]]-1000;
 
-  calcul=(pulse_duration[mode_mapping[PITCH]]-1500);
-  pitch_pulse_length=sgn(calcul) * round(fabs(calcul));
-
-  calcul=(pulse_duration[mode_mapping[YAW]]-1500);
-  yaw_pulse_length=sgn(calcul) * round(fabs(calcul));
-
-  throttle_pulse_length=round(pulse_duration[mode_mapping[THROTTLE]]-1000);
-
+  //AUTOMATIC MODE
   if (!MANUAL_MODE && throttle_pulse_length >= 50){
-  //if(1){
+  //if(1){        //use this test instead of the previous one to check on corrections with no throttle power.
     //memorize previous angles
     previous_angles[YAW]=angles[YAW];
     previous_angles[PITCH]=angles[PITCH];
@@ -184,27 +174,27 @@ if (difference_init<10000){
     angles[PITCH]=gyro.getAngleX();
     angles[ROLL]=gyro.getAngleY();
     //angleDisplay(300);
-
     
-    //memorize time difference in between angle mesures
+    //memorize time difference in between this measure and the last in seconds
     now = micros();
     delta_t=(now-previous_time)*1e-6;
+    previous_time=now;
+
     
     //Compute pid
-    //Serial.println("\n---------------");
     
-    error_pulse_length[ROLL] =  angles[ROLL]*100./4. - 0.*roll_pulse_length ;
+    error_pulse_length[ROLL] =  angles[ROLL]*25. - 0.*roll_pulse_length ;
     roll_pulse_length_pid = error_pulse_length[ROLL] * COEF_KP + ( error_pulse_length[ROLL]- previous_error_pulse_length[ROLL] )/ delta_t * COEF_KD ;
     //roll_pulse_length_pid = minMax(roll_pulse_length_pid, -400 , 400)/COMMAND_REDUCTION_COEF;
     //errorDisplay(80,ROLL,"roll");
 
-    error_pulse_length[PITCH] = angles[PITCH]*100./4. - 0.*pitch_pulse_length ;
+    error_pulse_length[PITCH] = angles[PITCH]*25. - 0.*pitch_pulse_length ;
     pitch_pulse_length_pid = error_pulse_length[PITCH] * COEF_KP + ( error_pulse_length[PITCH]- previous_error_pulse_length[PITCH] )/ delta_t * COEF_KD ;
     //pitch_pulse_length_pid = minMax(pitch_pulse_length_pid, -400, 400)/COMMAND_REDUCTION_COEF;
     //errorDisplay(80,PITCH,"pitch");
     
 
-    error_pulse_length[YAW] = angles[YAW]*100./4. - 0.*yaw_pulse_length ;
+    error_pulse_length[YAW] = angles[YAW]*25. - 0.*yaw_pulse_length ;
     yaw_pulse_length_pid = 0*error_pulse_length[YAW] * COEF_KP + ( error_pulse_length[YAW]- previous_error_pulse_length[YAW] ) / delta_t * COEF_KD ;
     //errorDisplay(80,YAW,"yaw");
 
@@ -213,7 +203,7 @@ if (difference_init<10000){
     previous_error_pulse_length[YAW] = error_pulse_length[YAW];
 
 
-    uT2 = (throttle_pulse_length/4.)*(throttle_pulse_length/4.); //pow((throttle_pulse_length)/4., 2);
+    uT2 = (throttle_pulse_length/4.)*(throttle_pulse_length/4.);
     w1Square = uT2 + (CYaw*yaw_pulse_length_pid -roll_pulse_length_pid -pitch_pulse_length_pid)/COMMAND_REDUCTION_COEF;
     w2Square = uT2 + (-CYaw*yaw_pulse_length_pid +roll_pulse_length_pid -pitch_pulse_length_pid)/COMMAND_REDUCTION_COEF;
     w3Square = uT2 + (-CYaw*yaw_pulse_length_pid -roll_pulse_length_pid +pitch_pulse_length_pid)/COMMAND_REDUCTION_COEF;
@@ -235,28 +225,31 @@ if (difference_init<10000){
     pitch_pulse_length= sgn(Pitch_PID)*round(fabs(Pitch_PID));
     yaw_pulse_length= sgn(Yaw_PID)*round(fabs(Yaw_PID));
     
-    previous_time=now;
     
   }
-
-if(MANUAL_MODE || throttle_pulse_length < 50){
+  
+  //MANUAL MODE
+  if(MANUAL_MODE || throttle_pulse_length < 50){
     calcul=roll_pulse_length/COMMAND_REDUCTION_COEF;
-  roll_pulse_length=sgn(calcul) * round(fabs(calcul));
-  roll_pulse_length=0; //optional
+    roll_pulse_length=sgn(calcul) * round(fabs(calcul));
     calcul=pitch_pulse_length/COMMAND_REDUCTION_COEF;
-  pitch_pulse_length=sgn(calcul) * round(fabs(calcul));
-  pitch_pulse_length=0; //optional
+    pitch_pulse_length=sgn(calcul) * round(fabs(calcul));
     calcul=yaw_pulse_length/COMMAND_REDUCTION_COEF;
-  yaw_pulse_length=sgn(calcul) * round(fabs(calcul));
-  yaw_pulse_length=0; //optional
+    yaw_pulse_length=sgn(calcul) * round(fabs(calcul));
+    
+    roll_pulse_length=0;    //OPTIONAL use to
+    pitch_pulse_length=0;   //prevent mishaps
+    yaw_pulse_length=0;     //before take-off
+  
+  
+  /*  //For display only :
+    gyro.update();
+    angles[YAW]=gyro.getAngleZ();
+    angles[PITCH]=gyro.getAngleX();
+    angles[ROLL]=gyro.getAngleY();
+    angleDisplay(300);*/
+  }
 
-/*  //For display only :
-  gyro.update();
-  angles[YAW]=gyro.getAngleZ();
-  angles[PITCH]=gyro.getAngleX();
-  angles[ROLL]=gyro.getAngleY();
-  angleDisplay(300);*/
-}
   //motor calibration
 
   pulse_length_escA = 1000 + REDUCE_MOTOR_A*( COEF_THROTTLE*throttle_pulse_length + COEF_PITCH_ROLL*roll_pulse_length - COEF_PITCH_ROLL*pitch_pulse_length + COEF_YAW*yaw_pulse_length );
@@ -267,17 +260,15 @@ if(MANUAL_MODE || throttle_pulse_length < 50){
 
   pulse_length_escD = 1000 + REDUCE_MOTOR_D*( COEF_THROTTLE*throttle_pulse_length - COEF_PITCH_ROLL*roll_pulse_length + COEF_PITCH_ROLL*pitch_pulse_length + COEF_YAW*yaw_pulse_length );
 
-
-
   pulse_length_escA=minMax(pulse_length_escA,1000,2000);
   pulse_length_escB=minMax(pulse_length_escB,1000,2000);
   pulse_length_escC=minMax(pulse_length_escC,1000,2000);
   pulse_length_escD=minMax(pulse_length_escD,1000,2000);
-
   //motorDisplay();
+
  
    //Sending pulses to ESCs
-   // Fs = 250Hz : impulse sent every 4000µs
+   //Impulse sent every 6000µs if not more
    now = micros();
    loop_timer = now;
 
@@ -336,6 +327,7 @@ void angleDisplay(int frequency) {
 
 void errorDisplay(int frequency, int angle, String name_angle) {
   if (passage==frequency){passage=0;
+    Serial.println("\n---------------");
     Serial.println("erreur :");     Serial.println((error_pulse_length[angle]- previous_error_pulse_length[angle] )/ delta_t * COEF_KD);
     Serial.println(name_angle);     Serial.println(error_pulse_length[angle]);
     Serial.print("previous");Serial.print(name_angle); Serial.println(previous_error_pulse_length[angle]);
