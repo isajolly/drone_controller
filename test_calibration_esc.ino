@@ -1,10 +1,10 @@
 #include <Servo.h>
 
- 
 
 Servo motA, motB, motC, motD;
 
 char data;
+char selection = 'B';
 
  
 
@@ -19,15 +19,21 @@ void setup() {
     Serial.begin(9600);
 
  
-
-    //motA.attach(8, 1000, 2000); // 1000 and 2000 are very important ! Values can be different with other ESCs.
-
-    //motB.attach(9, 1000, 2000);
-
-    //motC.attach(6, 1000, 2000);
-
-    motD.attach(7, 1000, 2000);
-
+    switch (selection){
+      case 'A' :
+        motA.attach(8, 1000, 2000); // 1000 and 2000 are very important ! Values can be different with other ESCs.
+        break;
+      case 'B' :
+        motB.attach(9, 1000, 2000);
+        break;
+      case 'C' :
+        motC.attach(6, 1000, 2000);
+        break;
+      case 'D' :
+        motD.attach(7, 1000, 2000);
+        break;
+      default : Serial.println("coding error");break;
+    }
  
 
     displayInstructions();
@@ -56,13 +62,21 @@ void loop() {
 
             case 48 : Serial.println("Sending 0 throttle");
 
-                      //motA.write(0);
-
-                      //motB.write(0);
-
-                      //motC.write(0);
-
-                      motD.write(0);
+                    switch (selection){
+                      case 'A' :
+                        motA.write(0);
+                        break;
+                      case 'B' :
+                        motB.write(0);
+                        break;
+                      case 'C' :
+                        motC.write(0);
+                        break;
+                      case 'D' :
+                        motD.write(0);
+                        break;
+                      default : Serial.println("coding error");break;
+                    }
 
             break;
 
@@ -72,13 +86,21 @@ void loop() {
 
             case 49 : Serial.println("Sending 180 throttle");
 
-                      //motA.write(180);
-
-                      //motB.write(180);
-
-                      //motC.write(180);
-
-                      motD.write(180);
+                    switch (selection){
+                      case 'A' :
+                        motA.write(180);
+                        break;
+                      case 'B' :
+                        motB.write(180);
+                        break;
+                      case 'C' :
+                        motC.write(180);
+                        break;
+                      case 'D' :
+                        motD.write(180);
+                        break;
+                      default : Serial.println("coding error");break;
+                    }
 
             break;
 
@@ -127,15 +149,21 @@ void test()
         Serial.println(i);
 
  
-
-        //motA.write(i);
-
-        //motB.write(i);
-
-        //motC.write(i);
-
-        motD.write(i);
-
+        switch (selection){
+          case 'A' :
+            motA.write(i);
+            break;
+          case 'B' :
+            motB.write(i);
+            break;
+          case 'C' :
+            motC.write(i);
+            break;
+          case 'D' :
+            motD.write(i);
+            break;
+          default : Serial.println("coding error");break;
+        }
  
 
         delay(200);
@@ -145,14 +173,22 @@ void test()
  
 
     Serial.println("STOP");
-
-    //motA.write(0);
-
-    //motB.write(0);
-
-    //motC.write(0);
-
-    motD.write(0);
+    
+    switch (selection){
+      case 'A' :
+        motA.write(0);
+        break;
+      case 'B' :
+        motB.write(0);
+        break;
+      case 'C' :
+        motC.write(0);
+        break;
+      case 'D' :
+        motD.write(0);
+        break;
+      default : Serial.println("coding error");break;
+    }
 
 }
 
