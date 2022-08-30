@@ -46,7 +46,7 @@ void color_loop()
   x = gyro.getAngleX();
   y= gyro.getAngleY();
 
-  if (fabs(x)<3. && fabs(y)<3.){no_color(); }
+ /* if (fabs(x)<3. && fabs(y)<3.){no_color(); }
   else if (x>0.){
     if(y>0.){
       if(x>y){color_fill(2);}
@@ -66,9 +66,37 @@ void color_loop()
       if(fabs(x)>fabs(y)){color_fill(8);}
       else{color_fill(11);}
     }
-  }
+  }*/
   
-
+  if (fabs(x)<3. && fabs(y)<3.){no_color(); }
+  else if (x>0.){
+    if(y>0.){
+      if(x/fabs(y)>0.75){color_fill(2);}
+      else if(x/fabs(y)>0.5){color_fill(3);}
+      else if(x/fabs(y)>0.25){color_fill(4);}
+      else{color_fill(5);}
+    }
+    else{
+      if(x/fabs(y)>0.75){color_fill(2);}
+      else if(x/fabs(y)>0.5){color_fill(1);}
+      else if(x/fabs(y)>0.25){color_fill(0);}
+      else{color_fill(11);}
+    }
+  }
+  else{
+    if(y>0.){
+      if(fabs(x)/fabs(y)>0.75){color_fill(8);}
+      else if(fabs(x)/fabs(y)>0.5){color_fill(7);}
+      else if(fabs(x)/fabs(y)>0.25){color_fill(6);}
+      else{color_fill(5);}
+    }
+    else{
+      if(fabs(x)/fabs(y)>0.75){color_fill(8);}
+      else if(fabs(x)/fabs(y)>0.5){color_fill(9);}
+      else if(fabs(x)/fabs(y)>0.25){color_fill(10);}
+      else{color_fill(11);}
+    }
+  }
 
   led.show();
 
@@ -84,7 +112,7 @@ void no_color(){
 void color_fill(int place){
   for (uint8_t t = 0; t < LEDNUM; t++ )
    {
-    if(t==place){ led.setColorAt( t, 200,0,50 );}
+    if(t==place){ led.setColorAt( t, min(int(fabs(x)+fabs(y)),255),0,max(60-int(fabs(x)+fabs(y)),0) );}
     else{ led.setColorAt( t, 0,0,0 );}
    }
 }
