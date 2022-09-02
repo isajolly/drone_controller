@@ -125,19 +125,22 @@ if (difference_init<10000){
 
   calcul=(pulse_duration[mode_mapping[ROLL]]-1500);
   roll_pulse_length=abs(calcul)/calcul * round(abs(calcul));
-  //Serial.println("roll :");Serial.println(roll_pulse_length);
+  Serial.print(roll_pulse_length);
+  Serial.print(",");
 
   calcul=(pulse_duration[mode_mapping[PITCH]]-1500);
   pitch_pulse_length=abs(calcul)/calcul * round(abs(calcul));
-  //Serial.println("pitch :");Serial.println(pitch_pulse_length);
-
+  Serial.print(pitch_pulse_length);
+  Serial.print(",");
+ 
   calcul=(pulse_duration[mode_mapping[YAW]]-1500);
   yaw_pulse_length=abs(calcul)/calcul * round(abs(calcul));
-  //Serial.println("yaw :");Serial.println(yaw_pulse_length);
-
+  Serial.print(yaw_pulse_length);
+  Serial.print(",");
+ 
   throttle_pulse_length=round(pulse_duration[mode_mapping[THROTTLE]]);
-  //Serial.println("throttle :");Serial.println(throttle_pulse_length);
-
+  Serial.print(throttle_pulse_length);
+  Serial.println();
  
  
 
