@@ -46,27 +46,6 @@ void color_loop()
   x = gyro.getAngleX();
   y= gyro.getAngleY();
 
- /* if (fabs(x)<3. && fabs(y)<3.){no_color(); }
-  else if (x>0.){
-    if(y>0.){
-      if(x>y){color_fill(2);}
-      else{color_fill(5);}
-    }
-    else{
-      if(x>fabs(y)){color_fill(2);}
-      else{color_fill(11);}
-    }
-  }
-  else{
-    if(y>0.){
-      if(fabs(x)>y){color_fill(8);}
-      else{color_fill(5);}
-    }
-    else{
-      if(fabs(x)>fabs(y)){color_fill(8);}
-      else{color_fill(11);}
-    }
-  }*/
   
   if (fabs(x)<3. && fabs(y)<3.){no_color(); }
   else if (x>0.){
