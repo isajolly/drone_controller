@@ -33,8 +33,8 @@ unsigned int testA,testB,testC,testD;
 volatile int pulse_duration[4] = {1000, 1000, 1000, 1000};
 int mode_mapping[4];
 
-//Display variables
-int passage;
+
+char data;
 
 
 
@@ -96,14 +96,16 @@ void loop()
 
         switch (data) {
           // 0
-          case 48 : Serial.println("Sending 0 throttle");
+          case 48 : Serial.println("Sending 1000 throttle");
             pulse_length_escA = 1000;
             break;
           //1
-          case 49 : Serial.print("Sending ");Serial.print(pulse_length_escA+10);Serial.println("throttle");
+          case 49 : Serial.print("Sending ");Serial.print(pulse_length_escA+10);Serial.println(" throttle");
             pulse_length_escA += 10;
             break;
+
         }
+  }
   
 
   //motor limitation
