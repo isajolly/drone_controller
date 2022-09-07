@@ -2,7 +2,7 @@ import csv
 import numpy as np
 import matplotlib.pyplot as plt
 
-fichiers=["values.csv","values.csv","values.csv","values.csv"]
+fichiers=["ESC06 - Foglio1.csv","ESC07 - Foglio1.csv","ESC13 - Foglio1.csv","ESC81 - Foglio1.csv"]
 
 f0=open(fichiers[0], newline='')
 f1=open(fichiers[1], newline='')
@@ -31,10 +31,10 @@ CommandIdle=1150
 CommandMax=2000
 
 for row in reader0:
-	ESCSignal.append(float(row['ESC signal (µs)']))
-	Thrust.append(float(row['Thrust (kgf)']))
-	Voltage.append(float(row['Voltage (V)']))
-	Current.append(float(row['Current (A)']))
+	ESCSignal.append(float(row['ESC']))
+	Thrust.append(float(row['Thrust']))
+	#Voltage.append(float(row['Voltage (V)']))
+	#Current.append(float(row['Current (A)']))
 
 Corr=[]
 New=[]
@@ -66,10 +66,10 @@ ThrustSpinMax1=1.881383512
 
 
 for row in reader1:
-	ESCSignal1.append(float(row['ESC signal (µs)']))
-	Thrust1.append(float(row['Thrust (kgf)']))
-	Voltage1.append(float(row['Voltage (V)']))
-	Current1.append(float(row['Current (A)']))
+	ESCSignal1.append(float(row['ESC']))
+	Thrust1.append(float(row['Thrust']))
+	#Voltage1.append(float(row['Voltage (V)']))
+	#Current1.append(float(row['Current (A)']))
 
 Corr1=[]
 New1=[]
@@ -101,10 +101,10 @@ ThrustSpinMax2=1.881383512
 
 
 for row in reader2:
-	ESCSignal2.append(float(row['ESC signal (µs)']))
-	Thrust2.append(float(row['Thrust (kgf)']))
-	Voltage2.append(float(row['Voltage (V)']))
-	Current2.append(float(row['Current (A)']))
+	ESCSignal2.append(float(row['ESC']))
+	Thrust2.append(float(row['Thrust']))
+	#Voltage2.append(float(row['Voltage (V)']))
+	#Current2.append(float(row['Current (A)']))
 
 Corr2=[]
 New2=[]
@@ -135,10 +135,10 @@ ThrustSpinMax3=1.881383512
 
 
 for row in reader3:
-	ESCSignal3.append(float(row['ESC signal (µs)']))
-	Thrust3.append(float(row['Thrust (kgf)']))
-	Voltage3.append(float(row['Voltage (V)']))
-	Current3.append(float(row['Current (A)']))
+	ESCSignal3.append(float(row['ESC']))
+	Thrust3.append(float(row['Thrust']))
+	#Voltage3.append(float(row['Voltage (V)']))
+	#Current3.append(float(row['Current (A)']))
 
 Corr3=[]
 New3=[]
@@ -157,24 +157,29 @@ for i in range(len(ESCSignal3)) :
 
 if __name__=="__main__":
 
-	
-	fig, (ax1, ax2, ax3, ax4) = plt.subplots(2, 2)
+	plt.plot(ESCSignal,New)
+	plt.plot(ESCSignal1,New1)
+	plt.plot(ESCSignal2,New2)
+	plt.plot(ESCSignal3,New3)
+	plt.show()
+
+	"""
+	fig, axs = plt.subplots(4)
 	fig.subplots_adjust(hspace=0.5)
 
-	plt.subplot(221)
-	plt.plot(ESCSignal, New)
-	plt.plot(ESCSignal, Thrust)
-	plt.subplot(222)
-	plt.plot(ESCSignal1, New1)
-	plt.plot(ESCSignal1, Thrust1)
-	plt.subplot(243)
-	plt.plot(ESCSignal2, New2)
-	plt.plot(ESCSignal2, Thrust2)
-	plt.subplot(224)
-	plt.plot(ESCSignal3, New3)
-	plt.plot(ESCSignal3, Thrust3)
+	axs[0].plot(ESCSignal, New)
+	axs[0].plot(ESCSignal, Thrust)
+
+	axs[1].plot(ESCSignal1, New1)
+	axs[1].plot(ESCSignal1, Thrust1)
+
+	axs[2].plot(ESCSignal2, New2)
+	axs[2].plot(ESCSignal2, Thrust2)
+
+	axs[3].plot(ESCSignal3, New3)
+	axs[3].plot(ESCSignal3, Thrust3)
 
 	plt.show()
-	
+	"""
 	
 	
