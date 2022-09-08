@@ -20,10 +20,10 @@
 
 #define COMMAND_REDUCTION  3.
 
-#define IDLE_A  1131
-#define IDLE_B  1225
-#define IDLE_C  1300
-#define IDLE_D  1194
+#define IDLE_A  1131  //motor 13
+#define IDLE_B  1225  //motor 14
+#define IDLE_C  1300  //motor 16
+#define IDLE_D  1194  //motor 2
 
 #define MAX_A 1635
 #define MAX_B 1880
@@ -190,17 +190,17 @@ if (difference_init<10000){
     
     //Compute pid
     
-    error_pulse_length[ROLL] =  angles[ROLL]*25. - 0.*roll_pulse_length ;
+    error_pulse_length[ROLL] =  angles[ROLL]*25. - roll_pulse_length ;
     roll_pulse_length_pid = error_pulse_length[ROLL] * COEF_KP + ( error_pulse_length[ROLL]- previous_error_pulse_length[ROLL] )/ delta_t * COEF_KD ;
     roll_pulse_length_pid = -roll_pulse_length_pid;
     //errorDisplay(1,ROLL,"roll");
 
-    error_pulse_length[PITCH] = angles[PITCH]*25. - 0.*pitch_pulse_length ;
+    error_pulse_length[PITCH] = angles[PITCH]*25. - pitch_pulse_length ;
     pitch_pulse_length_pid = error_pulse_length[PITCH] * COEF_KP + ( error_pulse_length[PITCH]- previous_error_pulse_length[PITCH] )/ delta_t * COEF_KD ;
     //errorDisplay(80,PITCH,"pitch");
     
 
-    error_pulse_length[YAW] = angles[YAW]*25. - 0.*yaw_pulse_length ;
+    error_pulse_length[YAW] = angles[YAW]*25. - yaw_pulse_length ;
     yaw_pulse_length_pid = 0.*error_pulse_length[YAW] * COEF_KP + ( error_pulse_length[YAW]- previous_error_pulse_length[YAW] ) / delta_t * COEF_KD_YAW ;
     //errorDisplay(80,YAW,"yaw");
 
