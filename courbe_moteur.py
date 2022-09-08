@@ -2,8 +2,8 @@ import csv
 import numpy as np
 import matplotlib.pyplot as plt
 
-fichiers=["ESC06 - Foglio1.csv","ESC07 - Foglio1.csv","ESC13 - Foglio1.csv","ESC81 - Foglio1.csv"]
-#fichiers=["motor-2-16.csv","motor-2-2.csv","motor-2-14.csv","motor-2-13.csv"]
+fichiers=["data/ESC06 - Foglio1.csv","data/ESC07 - Foglio1.csv","data/ESC13 - Foglio1.csv","data/ESC81 - Foglio1.csv"]
+#fichiers=["data/motor-2-16.csv","data/motor-2-2.csv","data/motor-2-14.csv","data/motor-2-13.csv"]
 
 f0=open(fichiers[0], newline='')
 f1=open(fichiers[1], newline='')
