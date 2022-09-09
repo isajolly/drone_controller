@@ -129,14 +129,14 @@ void setup()
     throttle_pulse_length=0;
     yaw_pulse_length=0;
  
-     a_A = (MAX_A - IDLE_A)/950 ;
-    b_A = IDLE_A - a_A*50 ;
-    a_B = (MAX_B - IDLE_B)/950 ;
-    b_B = IDLE_B - a_B*50 ;
-    a_C = (MAX_C - IDLE_C)/950 ;
-    b_C = IDLE_C - a_C*50 ;
-    a_D = (MAX_D - IDLE_D)/950 ;
-    b_D = IDLE_D - a_D*50 ;
+     a_A = (MAX_A - IDLE_A)/950. ;
+    b_A = IDLE_A - a_A*50. ;
+    a_B = (MAX_B - IDLE_B)/950. ;
+    b_B = IDLE_B - a_B*50. ;
+    a_C = (MAX_C - IDLE_C)/950. ;
+    b_C = IDLE_C - a_C*50. ;
+    a_D = (MAX_D - IDLE_D)/950. ;
+    b_D = IDLE_D - a_D*50. ;
 
 
 }
