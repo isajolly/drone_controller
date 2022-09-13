@@ -59,21 +59,13 @@ for row in reader0:
 	#Current.append(float(row['Current (A)']))
 
 Corr=[]
-New=[]
 for i in range(len(ESCSignal)) :
 	c=max(0,(ESCSignal[i]-CommandIdle)/(CommandMax-CommandIdle))
 	p=max(0,(1-MotExp)*c+MotExp*c*c)
 	value=SpinMin+p*(2000-SpinMin)
-	value= 1249.5+(ESCSignal[i]-1000)*0.6105 #drone orange
-	value= 1065+(ESCSignal[i]-1000)*0.73 #drone noir
+	value= 1000+(ESCSignal[i]-1249)/0.6105 #drone orange
+	value= 1000+(ESCSignal[i]-1065)/0.73 #drone noir
 	Corr.append(value)
-	a=2000
-	res=0
-	for j in range(len(Thrust)) :
-		if abs(value-ESCSignal[j])<a :
-			res=Thrust[j]
-			a=abs(value-ESCSignal[j])
-	New.append(res)
 	
 	
 #---------MOTOR 2--------------
@@ -90,21 +82,13 @@ for row in reader1:
 	#Current1.append(float(row['Current (A)']))
 
 Corr1=[]
-New1=[]
 for i in range(len(ESCSignal1)) :
 	c=max(0,(ESCSignal1[i]-CommandIdle)/(CommandMax-CommandIdle))
 	p=max(0,(1-MotExp1)*c+MotExp1*c*c)
 	value=SpinMin1+p*(2000-SpinMin1)
-	value= 1152+(ESCSignal1[i]-1000)*0.827 #drone orange
-	value= 1125+(ESCSignal1[i]-1000)*0.69 #drone noir
+	value= 1000+(ESCSignal1[i]-1152)/0.827 #drone orange
+	value= 1000+(ESCSignal1[i]-1152)/0.69 #drone noir
 	Corr1.append(value)
-	a=2000
-	res=0
-	for j in range(len(Thrust1)) :
-		if abs(value-ESCSignal1[j])<a :
-			res=Thrust1[j]
-			a=abs(value-ESCSignal1[j])
-	New1.append(res)
 	
 	
 #---------MOTOR 3--------------
@@ -121,22 +105,14 @@ for row in reader2:
 	#Current2.append(float(row['Current (A)']))
 
 Corr2=[]
-New2=[]
 for i in range(len(ESCSignal2)) :
 	c=max(0,(ESCSignal2[i]-CommandIdle)/(CommandMax-CommandIdle))
 	p=max(0,(1-MotExp2)*c+MotExp2*c*c)
 	value=SpinMin2+p*(2000-SpinMin2)
-	value= 1190+(ESCSignal2[i]-1000)*0.689 #drone orange
-	value= 1056+(ESCSignal2[i]-1000)*0.86 #drone noir
+	value= 1000+(ESCSignal2[i]-1190)/0.689 #drone orange
+	value= 1000+(ESCSignal2[i]-1056)/0.86 #drone noir
 	Corr2.append(value)
-	a=2000
-	res=0
-	for j in range(len(Thrust2)) :
-		if abs(value-ESCSignal2[j])<a :
-			res=Thrust2[j]
-			a=abs(value-ESCSignal2[j])
-	New2.append(res)
-	
+
 #---------MOTOR 4--------------
 ESCSignal3=[]
 Thrust3=[]
@@ -151,21 +127,13 @@ for row in reader3:
 	#Current3.append(float(row['Current (A)']))
 
 Corr3=[]
-New3=[]
 for i in range(len(ESCSignal3)) :
 	c=max(0,(ESCSignal3[i]-CommandIdle)/(CommandMax-CommandIdle))
 	p=max(0,(1-MotExp3)*c+MotExp3*c*c)
 	value=SpinMin3+p*(2000-SpinMin3)
-	value=1104+0.53*(ESCSignal3[i]-1000) #drone orange
-	value=1063+0.73*(ESCSignal3[i]-1000) #drone noir
+	value=1000+1/0.53*(ESCSignal3[i]-1104) #drone orange
+	value=1000+1/0.73*(ESCSignal3[i]-1063) #drone noir
 	Corr3.append(value)
-	a=2000
-	res=0
-	for j in range(len(Thrust3)) :
-		if abs(value-ESCSignal3[j])<a :
-			res=Thrust3[j]
-			a=abs(value-ESCSignal3[j])
-	New3.append(res)
 	
 
 if __name__=="__main__":
@@ -181,11 +149,11 @@ if __name__=="__main__":
 	#plt.plot([1100+10*i for i in range(85)],[60 for i in range(85)], color= 'red') #drone orange
 	plt.show()
 	
-	plt.plot(ESCSignal,New, color=color0)
-	plt.plot(ESCSignal1,New1, color=color1)
-	plt.plot(ESCSignal2,New2, color=color2)
-	plt.plot(ESCSignal3,New3, color=color3)
-	#plt.plot([1150+10*i for i in range(85)],[8*i for i in range(50)], color= 'red') #drone noir
+	plt.plot(Corr,Thrust, color=color0)
+	plt.plot(Corr1,Thrust1, color=color1)
+	plt.plot(Corr2,Thrust2, color=color2)
+	plt.plot(Corr3,Thrust3, color=color3)
+	plt.plot([1000+10*i for i in range(95)],[6.5*i for i in range(95)], color= 'red') #drone noir
 	#plt.plot([1050+10*i for i in range(90)],[50+4*i for i in range(90)], color= 'red') #drone orange
 	plt.show()
 
